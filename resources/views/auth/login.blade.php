@@ -53,7 +53,7 @@
                         class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring focus:ring-blue-400 focus:outline-none">
                     <label for="remember" class="ml-2 text-sm text-gray-600">Remember me</label>
                 </div>
-
+                <a href="{{ route('password.request')}}">Lupa Password</a>
                 <!-- Submit Button -->
                 <div>
                     <button type="submit"

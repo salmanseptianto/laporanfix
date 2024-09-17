@@ -11,14 +11,9 @@ class Harian extends Model
 
     protected $table = 'harian';
 
-    protected $fillable = [
-        'id_marketing',
-        'date',
-        'project',
-        'leads',
-        'aktivitas',
-    ];
-     public function marketing()
+    protected $fillable = ['id_marketing', 'date', 'project', 'nama', 'pekerjaan', 'alamat', 'prospek', 'foto', 'leads', 'aktivitas'];
+
+    public function marketing()
     {
         return $this->belongsTo(User::class, 'id_marketing');
     }

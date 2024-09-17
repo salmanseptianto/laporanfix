@@ -12,6 +12,7 @@ use Illuminate\Contracts\Encryption\DecryptException;
 use App\Models\user;
 use App\Models\Harian;
 use App\Models\Mingguan;
+use Illuminate\Support\Facades\Storage;
 
 class MarketingController extends Controller
 {
@@ -26,25 +27,9 @@ class MarketingController extends Controller
 
         // Recent activities
         $recentActivities = DB::table('harian')
-            ->select(
-                'harian.date',
-                'harian.id_marketing as user_id',
-                DB::raw('CASE WHEN harian.status = 1 THEN "Uploaded" ELSE "Submitted Report" END as action'),
-                'harian.status',
-                'users.name as user_name'
-            )
+            ->select('harian.date', 'harian.id_marketing as user_id', DB::raw('CASE WHEN harian.status = 1 THEN "Uploaded" ELSE "Submitted Report" END as action'), 'harian.status', 'users.name as user_name')
             ->join('users', 'users.id', '=', 'harian.id_marketing')
-            ->union(
-                DB::table('mingguan')
-                    ->select(
-                        'mingguan.periode as date',
-                        'mingguan.id_marketing as user_id',
-                        DB::raw('CASE WHEN mingguan.status = 1 THEN "Uploaded" ELSE "Created Task" END as action'),
-                        'mingguan.status',
-                        'users.name as user_name'
-                    )
-                    ->join('users', 'users.id', '=', 'mingguan.id_marketing')
-            )
+            ->union(DB::table('mingguan')->select('mingguan.periode as date', 'mingguan.id_marketing as user_id', DB::raw('CASE WHEN mingguan.status = 1 THEN "Uploaded" ELSE "Created Task" END as action'), 'mingguan.status', 'users.name as user_name')->join('users', 'users.id', '=', 'mingguan.id_marketing'))
             ->orderBy('date', 'desc')
             ->limit(10)
             ->get();
@@ -67,13 +52,11 @@ class MarketingController extends Controller
         // Prepare data for the performance chart
         $performanceData = User::with([
             'harian' => function ($query) {
-                $query->selectRaw('id_marketing, status, COUNT(*) as count')
-                    ->groupBy('id_marketing', 'status');
+                $query->selectRaw('id_marketing, status, COUNT(*) as count')->groupBy('id_marketing', 'status');
             },
             'mingguan' => function ($query) {
-                $query->selectRaw('id_marketing, status, COUNT(*) as count')
-                    ->groupBy('id_marketing', 'status');
-            }
+                $query->selectRaw('id_marketing, status, COUNT(*) as count')->groupBy('id_marketing', 'status');
+            },
         ])
             ->where('role', 'marketing')
             ->get()
@@ -83,7 +66,7 @@ class MarketingController extends Controller
                     'name' => $user->name,
                     'accepted' => $user->harian->where('status', 1)->sum('count') + $user->mingguan->where('status', 1)->sum('count'),
                     'rejected' => $user->harian->where('status', 2)->sum('count') + $user->mingguan->where('status', 2)->sum('count'),
-                    'total' => $user->harian->sum('count') + $user->mingguan->sum('count')
+                    'total' => $user->harian->sum('count') + $user->mingguan->sum('count'),
                 ];
             });
 
@@ -98,7 +81,7 @@ class MarketingController extends Controller
             'recentActivities' => $recentActivities,
             'uploadedStatus' => $uploadedStatus,
             'performanceData' => $performanceData,
-            'marketingUsers' => $marketingUsers
+            'marketingUsers' => $marketingUsers,
         ]);
     }
 
@@ -113,33 +96,36 @@ class MarketingController extends Controller
 
     public function addharian(Request $request)
     {
+        // Validasi input form
         $validatedData = $request->validate([
+            'nama' => 'required|string',
             'project' => 'required|string',
-            'leads' => 'nullable|string',
-            'aktivitas' => 'nullable|string',
+            'pekerjaan' => 'required|string',
+            'alamat' => 'required|string',
+            'prospek' => 'required|string',
+            // 'foto' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048', // Validasi file foto
         ]);
 
+        // $fotoPath = null;
+        // if ($request->hasFile('foto')) {
+        //     $foto = $request->file('foto');
+        //     $fotoPath = $foto->store('marketing/harian', 'public');
+        // }
+
+        // Simpan data ke database
         Harian::create([
             'id_marketing' => auth()->id(),
             'date' => now(),
+            'nama' => $request->nama,
             'project' => $request->project,
-            'leads' => $request->leads,
-            'aktivitas' => $request->aktivitas,
+            'pekerjaan' => $request->pekerjaan,
+            'alamat' => $request->alamat,
+            'prospek' => $request->prospek,
+            // 'foto' => $fotoPath,
         ]);
 
-        return redirect()->route('marketing')->with('success', 'Registration successful, please login!');
+        return redirect()->route('marketing')->with('success', 'Data berhasil disimpan!');
     }
-
-    // public function harianedit($id)
-    // {
-    //     $userId = auth()->id();
-    //     $harian = Harian::findOrFail($id);
-
-    //     if ($harian->id_marketing !== $userId) {
-    //         return view('errors.404');
-    //     }
-    //     return view('marketing.harian.edit', compact('harian'));
-    // }
 
     public function harianedit($id)
     {
@@ -153,25 +139,69 @@ class MarketingController extends Controller
         return view('marketing.harian.edit', compact('harian'));
     }
 
-    public function harianupdate(Request $request, $id)
+    // public function harianupdate(Request $request, $id)
+    // {
+    //     $validatedData = $request->validate([
+    //         'project' => 'required|string',
+    //         'leads' => 'nullable|string',
+    //         'aktivitas' => 'nullable|string',
+    //     ]);
+
+    //     $enkId = Crypt::decrypt($id);
+    //     $harian = Harian::findOrFail($enkId);
+    //     $harian->update($validatedData);
+
+    //     return redirect()->route('harian')->with('success', 'Data berhasil diperbarui!');
+    // }
+
+    public function harianupdate (Request $request, $id)
     {
+        // Validate input form
         $validatedData = $request->validate([
+            'nama' => 'required|string',
             'project' => 'required|string',
-            'leads' => 'nullable|string',
-            'aktivitas' => 'nullable|string',
+            'pekerjaan' => 'required|string',
+            'alamat' => 'required|string',
+            'prospek' => 'required|string',
+            // 'foto' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048', // Validation for photo
         ]);
 
         $enkId = Crypt::decrypt($id);
+        $userId = auth()->id();
         $harian = Harian::findOrFail($enkId);
-        $harian->update($validatedData);
 
-        return redirect()->route('harian')->with('success', 'Data berhasil diperbarui!');
+        if ($harian->id_marketing !== $userId) {
+            return view('errors.404');
+        }
+
+        // $fotoPath = $harian->foto; // Keep existing photo path if not updated
+        // if ($request->hasFile('foto')) {
+        //     $foto = $request->file('foto');
+        //     $fotoPath = $foto->store('marketing/harian', 'public');
+        // }
+
+        // Update data in the database
+        $harian->update([
+            'nama' => $request->nama,
+            'project' => $request->project,
+            'pekerjaan' => $request->pekerjaan,
+            'alamat' => $request->alamat,
+            'prospek' => $request->prospek,
+            // 'foto' => $fotoPath,
+        ]);
+
+        return redirect()->route('marketing')->with('success', 'Data berhasil diperbarui!');
     }
 
     public function hariandestroy($id)
     {
         $enkId = Crypt::decrypt($id);
         $harian = Harian::findOrFail($enkId);
+
+        if ($harian->foto) {
+            Storage::delete('public/' . $harian->foto);
+        }
+
         $harian->delete();
 
         return redirect()->route('harian')->with('success', 'Data berhasil dihapus!');

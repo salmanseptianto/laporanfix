@@ -6,7 +6,11 @@ use App\Http\Controllers\MmController;
 use App\Http\Controllers\MarketingController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\ExportController;
-use App\Http\Controllers\Auth\AuthController;
+use App\Http\Controllers\AuthController;
+use App\Http\Controllers\ResetPasswordController;
+// use Illuminate\Support\Facades\Password;
+// use Illuminate\Support\Facades\Mail; //test email
+// use App\Mail\TestEmail; //test email
 
 /*
 |--------------------------------------------------------------------------
@@ -24,6 +28,13 @@ Route::controller(AuthController::class)->group(function () {
     Route::get('/login', 'index')->name('login')->middleware('guest');
     Route::post('dologin', 'dologin')->middleware('guest');
     Route::post('/logout', 'logout')->name('logout');
+});
+
+Route::controller(ResetPasswordController::class)->group(function () {
+    Route::get('/forgot-password', 'requestForm')->name('password.request');
+    Route::post('/forgot-password', 'sendResetLink')->name('password.email');
+    Route::get('/reset-password/{token}', 'resetForm')->name('password.reset');
+    Route::post('/reset-password', 'updatePassword')->name('password.update');
 });
 
 Route::middleware('role:admin')->group(function () {
@@ -89,3 +100,8 @@ Route::middleware('role:admin')->group(function () {
         Route::get('admin/laporan-marketing/laporan-mingguan/export-pdf/{type}', 'exportPDFM')->name('mingguan.export.pdf');
     });
 });
+
+// Route::get('/test.email', function (){
+//     Mail::to('112umarshahib@gmail.com')
+//     ->send(new TestEmail());
+// });
